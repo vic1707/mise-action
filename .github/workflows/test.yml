@@ -27,7 +27,7 @@ jobs:
         env:
           - { name: ubuntu, runs-on: ubuntu-latest }
           - { name: macos, runs-on: macos-latest }
-          - { name: alpine, runs-on: ubuntu-latest, container: alpine:latest, requirements: apk add --no-cache curl }
+          - { name: alpine, runs-on: ubuntu-latest, container: alpine:latest, requirements: apk add --no-cache curl bash }
     name: ${{ matrix.env.name }}
     runs-on: ${{ matrix.env.runs-on }}
     container: ${{ matrix.env.container }}
