@@ -93,7 +93,7 @@ async function restoreMiseCache(): Promise<string | undefined> {
     ].join('\n')
   )
   const prefix = core.getInput('cache_key_prefix') || 'mise-v0'
-  let primaryKey = `${prefix}-${getOS()}-${os.arch()}-${fileHash}`
+  let primaryKey = `${prefix}-${getTarget()}-${fileHash}`
   if (version) {
     primaryKey = `${primaryKey}-${version}`
   }
@@ -127,13 +127,13 @@ async function setupMise(version: string): Promise<void> {
   const miseBinDir = path.join(miseDir(), 'bin')
   const miseBinPath = path.join(
     miseBinDir,
-    getOS() === 'windows' ? 'mise.exe' : 'mise'
+    process.platform === 'win32' ? 'mise.exe' : 'mise'
   )
   if (!fs.existsSync(path.join(miseBinPath))) {
     core.startGroup(version ? `Download mise@${version}` : 'Setup mise')
     await fs.promises.mkdir(miseBinDir, { recursive: true })
     const ext =
-      getOS() === 'windows'
+    process.platform === 'win32'
         ? '.zip'
         : version && version.startsWith('2024')
           ? ''
@@ -141,7 +141,7 @@ async function setupMise(version: string): Promise<void> {
             ? '.tar.zst'
             : '.tar.gz'
     version = (version || (await latestMiseVersion())).replace(/^v/, '')
-    const url = `https://github.com/jdx/mise/releases/download/v${version}/mise-v${version}-${getOS()}-${os.arch()}${ext}`
+    const url = `https://github.com/jdx/mise/releases/download/v${version}/mise-v${version}-${getTarget()}${ext}`
     const archivePath = path.join(os.tmpdir(), `mise${ext}`)
     switch (ext) {
       case '.zip':
@@ -198,17 +198,6 @@ async function setMiseToml(): Promise<void> {
   const toml = core.getInput('mise_toml')
   if (toml) {
     await writeFile('mise.toml', toml)
-  }
-}
-
-function getOS(): string {
-  switch (process.platform) {
-    case 'darwin':
-      return 'macos'
-    case 'win32':
-      return 'windows'
-    default:
-      return process.platform
   }
 }
 
@@ -270,4 +259,37 @@ async function saveCache(cacheKey: string): Promise<void> {
 
     core.info(`Cache saved from ${cachePath} with key: ${cacheKey}`)
   })
+}
+
+function getTarget(): string {
+  let { platform, arch } = process;
+
+  // quick overwrite to abide by release format
+  if (arch === 'arm') arch = 'armv7' as NodeJS.Architecture;
+
+  switch (platform) {
+    case 'darwin':
+      return `macos-${arch}`
+    case 'win32':
+      return `windows-${arch}`
+    case 'linux':
+      const muslPrefix = isMusl() ? '-musl' : '';
+      return `linux-${arch}${muslPrefix}`
+    default:
+      throw new Error(`Unsupported platform ${platform}`)
+  }
+}
+
+// inspired by <https://github.com/biomejs/biome/pull/1067/files>
+import { execSync } from 'child_process';
+function isMusl() {
+	let stderr;
+	try {
+		stderr = execSync("ldd --version", {
+			stdio: ['pipe', 'pipe', 'pipe']
+		});
+	} catch (err: any) {
+		stderr = err.stderr;
+	}
+	return stderr.indexOf("musl") > -1;
 }
